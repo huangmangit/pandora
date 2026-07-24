@@ -1,7 +1,7 @@
 services:
   mysql:
     image: mysql:8.0
-    container_name: pandora-mysql
+    container_name: mysql
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
@@ -22,7 +22,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: pandora-redis
+    container_name: redis
     restart: always
     command: redis-server /usr/local/etc/redis/redis.conf
     ports:
@@ -40,13 +40,14 @@ services:
 
   caddy:
     image: caddy:alpine
-    container_name: pandora-caddy
+    container_name: caddy
     restart: always
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ../apps:/var/www/apps:ro
       - caddy-data:/data
     networks:
       - pandora-net
@@ -55,7 +56,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.php74
-    container_name: pandora-php74
+    container_name: php74
     restart: always
     volumes:
       - ../apps:/var/www/apps:ro
@@ -66,16 +67,30 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.php83
-    container_name: pandora-php83
+    container_name: php83
     restart: always
     volumes:
       - ../apps:/var/www/apps:ro
     networks:
       - pandora-net
 
+  dpanel:
+    image: dpanel/dpanel:latest
+    container_name: dpanel
+    restart: always
+    ports:
+      - "${DPANEL_PORT:-8807}:8080"
+    environment:
+      APP_NAME: dpanel
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - dpanel-data:/dpanel
+    networks:
+      - pandora-net
+
   nginx-proxy-manager:
     image: jc21/nginx-proxy-manager:latest
-    container_name: pandora-npm
+    container_name: nginx-proxy-manager
     restart: always
     ports:
       - "${NPM_HTTP_PORT:-8180}:80"
@@ -91,7 +106,7 @@ services:
 
   woodpecker-server:
     image: woodpeckerci/woodpecker-server:latest
-    container_name: pandora-woodpecker-server
+    container_name: woodpecker-server
     restart: always
     ports:
       - "8000:8000"
@@ -107,7 +122,7 @@ services:
 
   woodpecker-agent:
     image: woodpeckerci/woodpecker-agent:latest
-    container_name: pandora-woodpecker-agent
+    container_name: woodpecker-agent
     restart: always
     depends_on:
       - woodpecker-server
@@ -116,20 +131,6 @@ services:
     environment:
       WOODPECKER_SERVER: woodpecker-server:9000
       WOODPECKER_AGENT_SECRET: ${WOODPECKER_AGENT_SECRET}
-    networks:
-      - pandora-net
-
-  dpanel:
-    image: dpanel/dpanel:latest
-    container_name: pandora-dpanel
-    restart: always
-    ports:
-      - "${DPANEL_PORT:-8807}:8080"
-    environment:
-      APP_NAME: pandora-dpanel
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - dpanel-data:/dpanel
     networks:
       - pandora-net
 

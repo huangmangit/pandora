@@ -1,333 +1,325 @@
 # Core — 核心基础服务
 
-> 所有业务项目共享的底层基础设施，一次部署长期运行，很少变动。
+> 所有项目共享的底层基础设施，一版本一容器，一次部署长期运行。
 
 ---
-
-## 架构概览
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                         core/                                     │
-│                                                                   │
-│   ┌──────────┐  ┌──────────┐  ┌───────────────────────┐          │
-│   │  MySQL   │  │  Redis   │  │ Nginx Proxy Manager   │          │
-│   │  :3306   │  │  :6379   │  │  :80 / :443 / :81     │          │
-│   └────┬─────┘  └────┬─────┘  │  (Web UI 管理反代)     │          │
-│        │             │        └───────────┬───────────┘          │
-│        │             │                    │  反代到 apps/        │
-│        │             │                    │  下所有项目           │
-│        └──────┬──────┘                    │                      │
-│               │                           │                      │
-│        ┌──────┴──────┐           ┌───────┴───────┐  ┌──────────┐ │
-│        │ pandora-net │           │  Woodpecker   │  │  DPanel  │ │
-│        │  (bridge)   │           │  CI/CD :8000  │  │  :8807   │ │
-│        └─────────────┘           └───────────────┘  └──────────┘ │
-└──────────────────────────────────────────────────────────────────┘
-```
 
 ## 服务清单
 
 | 服务 | 镜像 | 端口 | 容器名 |
 |------|------|------|--------|
-| MySQL | `mysql:8.0` | 3306 | `pandora-mysql` |
-| Redis | `redis:7-alpine` | 6379 | `pandora-redis` |
-| Nginx Proxy Manager | `jc21/nginx-proxy-manager:latest` | 80, 443, 81 | `pandora-npm` |
-| Woodpecker Server | `woodpeckerci/woodpecker-server:latest` | 8000 | `pandora-woodpecker-server` |
-| Woodpecker Agent | `woodpeckerci/woodpecker-agent:latest` | — | `pandora-woodpecker-agent` |
-| DPanel | `dpanel/dpanel:latest` | 8807 | `pandora-dpanel` |
+| Caddy | `caddy:alpine` | 80, 443 | `caddy` |
+| PHP 7.4 | 自构建 (`Dockerfile.php74`) | — | `php74` |
+| PHP 8.3 | 自构建 (`Dockerfile.php83`) | — | `php83` |
+| MySQL | `mysql:8.0` | 3306 | `mysql` |
+| Redis | `redis:7-alpine` | 6379 | `redis` |
+| DPanel | `dpanel/dpanel:latest` | 8807 | `dpanel` |
+| Woodpecker Server | `woodpeckerci/woodpecker-server:latest` | 8000 | `woodpecker-server` |
+| Woodpecker Agent | `woodpeckerci/woodpecker-agent:latest` | — | `woodpecker-agent` |
+| Nginx Proxy Manager | `jc21/nginx-proxy-manager:latest` | 8180/8443/8181 | `nginx-proxy-manager` (production profile) |
+
+---
+
+## 架构
+
+```
+                          caddy (:80/:443)
+                               │
+          ┌────────────────────┼────────────────────┐
+          ▼                    ▼                    ▼
+       php74                 php83              静态/反代
+       (PHP-FPM 7.4)         (PHP-FPM 8.3)         ...
+          │                    │
+          └──────────┬─────────┘
+                     │
+              mysql (:3306)
+              redis (:6379)
+
+   所有容器加入 pandora-net（bridge），容器名直连。
+   apps/ 源码同时挂载到 Caddy 和所有 FPM 容器（只读），路径一致。
+```
 
 ---
 
 ## 环境变量（`.env`）
 
-所有核心服务的配置集中在 `core/.env`，修改后重启生效。
-
 | 变量 | 服务 | 说明 | 默认值 |
 |------|------|------|--------|
-| `MYSQL_ROOT_PASSWORD` | MySQL | root 密码，**生产环境务必修改** | `pandora123` |
-| `MYSQL_DATABASE` | MySQL | 初始化时创建的默认数据库 | `pandora` |
-| `REDIS_PASSWORD` | Redis | Redis 认证密码 | `pandora123` |
-| `WOODPECKER_HOST` | Server | Woodpecker 对外访问地址 | `http://localhost:8000` |
-| `WOODPECKER_GITEA_URL` | Server | Gitea / Git 服务地址 | `http://gitea:3000` |
-| `WOODPECKER_AGENT_SECRET` | Server + Agent | Agent 通信密钥，**务必改为随机字符串** | `change-me-to-random-string` |
-| `WOODPECKER_ADMIN` | Server | 管理员用户名 | `admin` |
-| `DPANEL_PORT` | DPanel | 面板访问端口（宿主机） | `8807` |
-| `NPM_ADMIN_PORT` | Proxy Manager | 管理界面端口 | `81` |
-
-> **安全提示**：首次部署前，请至少修改 `MYSQL_ROOT_PASSWORD`、`REDIS_PASSWORD` 和 `WOODPECKER_AGENT_SECRET` 三项。
-
----
-
-## 各服务详解
-
-### 1. MySQL — 关系型数据库
-
-| 属性 | 值 |
-|------|-----|
-| 镜像 | `mysql:8.0` |
-| 内部端口 | 3306 |
-| 对外端口 | 3306 |
-| 数据卷 | `mysql-data` → `/var/lib/mysql` |
-| 配置挂载 | `mysql/conf.d/` → `/etc/mysql/conf.d/`（只读） |
-| 初始化脚本 | `mysql/init/` → `/docker-entrypoint-initdb.d/`（只读） |
-| 健康检查 | `mysqladmin ping` / 10s 间隔 / 5s 超时 / 5 次重试 |
-
-**自定义配置** (`mysql/conf.d/custom.cnf`)：
-
-```ini
-[mysqld]
-character-set-server = utf8mb4
-collation-server     = utf8mb4_unicode_ci
-default-time-zone    = '+08:00'
-max_connections      = 200
-innodb_buffer_pool_size = 256M
-```
-
-**初始化脚本** (`mysql/init/01-init.sql`)：
-
-容器首次启动时自动执行，为各 demo 项目预建数据库。新增项目时在此目录添加 `.sql` 文件即可，已存在的数据库不会被覆盖。
-
-**连接方式**：
-
-```bash
-# 宿主机
-mysql -h 127.0.0.1 -P 3306 -u root -p
-
-# 同网络其他容器：直接用容器名
-# host=mysql, port=3306, user=root, password=${MYSQL_ROOT_PASSWORD}
-```
+| `MYSQL_ROOT_PASSWORD` | MySQL | root 密码 | `pandora123` |
+| `MYSQL_DATABASE` | MySQL | 默认数据库 | `pandora` |
+| `REDIS_PASSWORD` | Redis | 认证密码 | `pandora123` |
+| `WOODPECKER_HOST` | Server | 对外地址 | `http://localhost:8000` |
+| `WOODPECKER_GITEA_URL` | Server | Git 服务地址 | `http://gitea:3000` |
+| `WOODPECKER_AGENT_SECRET` | Server+Agent | 通信密钥 | `change-me-to-random-string` |
+| `WOODPECKER_ADMIN` | Server | 管理员 | `admin` |
+| `DPANEL_PORT` | DPanel | 面板端口 | `8807` |
+| `NPM_HTTP_PORT` | NPM | HTTP（备用） | `8180` |
+| `NPM_HTTPS_PORT` | NPM | HTTPS（备用） | `8443` |
+| `NPM_ADMIN_PORT` | NPM | 管理界面 | `8181` |
 
 ---
 
-### 2. Redis — 缓存 & 队列
+## Caddy 站点配置
 
-| 属性 | 值 |
-|------|-----|
-| 镜像 | `redis:7-alpine` |
-| 内部端口 | 6379 |
-| 对外端口 | 6379 |
-| 数据卷 | `redis-data` → `/data` |
-| 配置挂载 | `redis/redis.conf` → `/usr/local/etc/redis/redis.conf`（只读） |
-| 启动命令 | `redis-server /usr/local/etc/redis/redis.conf` |
-| 健康检查 | `redis-cli ping` / 10s 间隔 / 5s 超时 / 5 次重试 |
+所有站点配置集中在 `core/Caddyfile`，修改后执行 `caddy reload` 即可生效，无需重启容器。
 
-**自定义配置** (`redis/redis.conf`)：
+### 配置文件结构
 
-```conf
-port 6379
-bind 0.0.0.0
-requirepass pandora123
-maxmemory 128mb
-maxmemory-policy allkeys-lru
-save 300 10
-save 60 10000
-dir /data
-appendonly yes
-```
+```caddyfile
+{
+    auto_https off          # 本地开发关闭自动 HTTPS
+}
 
-**连接方式**：
+:80 {
+    # 站点1
+    @site1 host site1.local.pandora
+    handle @site1 {
+        root * /var/www/apps/personal/site1/public
+        php_fastcgi php74:9000
+    }
 
-```bash
-# 宿主机
-redis-cli -h 127.0.0.1 -p 6379 -a pandora123
-
-# 同网络其他容器
-# host=redis, port=6379, password=${REDIS_PASSWORD}
-```
-
----
-
-### 3. Nginx Proxy Manager — Web UI 统一网关
-
-| 属性 | 值 |
-|------|-----|
-| 镜像 | `jc21/nginx-proxy-manager:latest` |
-| 对外端口 | 80 (HTTP), 443 (HTTPS), `${NPM_ADMIN_PORT:-81}` (管理界面) |
-| 数据卷 | `npm-data` → `/data`、`npm-letsencrypt` → `/etc/letsencrypt` |
-
-**工作原理**：
-
-Nginx Proxy Manager 是 Pandora 的唯一流量入口，接管全部 80/443 请求，通过 Web UI 管理所有反代规则。业务项目容器加入 `pandora-net` 后，NPM 可直接用容器名反代。
-
-**添加新项目**（Web UI 操作，无需手写配置文件）：
-
-1. 访问管理界面 `http://<host>:81`（默认账号 `admin@example.com` / 密码 `changeme`）
-2. 点击 **Proxy Hosts → Add Proxy Host**
-3. 填写 Domain Names（如 `blog.local.pandora`）、Forward Hostname（如 `demo-blog-frontend`）、Forward Port（`80`）
-4. 保存即生效，无需重启
-
-**FPM 项目如何配置**：
-
-NPM 默认使用 HTTP 反代，PHP-FPM 需要通过 Advanced 选项卡添加 FastCGI 配置。以 Yii2 前后端分离为例：
-
-- 前端（静态）：直接 Proxy Host → `demo-blog-frontend:80`
-- 后端（FPM）：同一个 Proxy Host，在 Advanced 中粘贴：
-
-```nginx
-location /api {
-    fastcgi_pass demo-blog-backend:9000;
-    fastcgi_index index.php;
-    fastcgi_param SCRIPT_FILENAME /var/www/html/web$fastcgi_script_name;
-    include fastcgi_params;
+    # 站点2
+    @site2 host site2.local.pandora
+    handle @site2 {
+        root * /var/www/apps/personal/site2/public
+        php_fastcgi php83:9000
+    }
 }
 ```
 
-> Hyperf 项目自带 Swoole HTTP Server，直接用 NPM 默认 HTTP 反代即可，无需 Advanced。
+### 添加 PHP 站点（FPM 模式）
 
-**SSL 证书**：支持一键 Let's Encrypt 自动签发和续期，Web UI 操作即可。
-### 4. DPanel — Docker 可视化管理
+假设要添加一个 PHP 8.3 项目 `my-app`，源码在 `apps/personal/my-app/public/`：
 
-| 属性 | 值 |
-|------|-----|
-| 镜像 | `dpanel/dpanel:latest` |
-| 对外端口 | `${DPANEL_PORT:-8807}` → `8080` |
-| 数据卷 | `dpanel-data` → `/dpanel` |
-| Socket 挂载 | `/var/run/docker.sock` (读写) |
+**步骤 1** — 在 `Caddyfile` 的 `:80 {}` 块内添加：
 
-**功能**：浏览器中管理所有 Docker 容器、镜像、网络、数据卷，提供可视化 Compose 编排界面。
-
-> **端口说明**：DPanel 容器内部监听 8080，仅映射到宿主机 `${DPANEL_PORT}`（默认 8807），不占用 80/443，避免与 Nginx Gateway 冲突。
-
-```bash
-# 访问面板
-open http://<host>:8807
+```caddyfile
+    @myapp host myapp.local.pandora
+    handle @myapp {
+        root * /var/www/apps/personal/my-app/public
+        php_fastcgi php83:9000
+    }
 ```
 
-> 首次访问根据界面提示完成初始化即可。
+**步骤 2** — 重载 Caddy：
+
+```bash
+docker exec caddy caddy reload --config /etc/caddy/Caddyfile
+```
+
+**步骤 3** — 浏览器访问（需配 hosts 指向 `127.0.0.1`）：
+
+```
+http://myapp.local.pandora
+```
+
+### 关键说明
+
+| 要点 | 说明 |
+|------|------|
+| **域名匹配** | `@name host <domain>` 定义一个 host 匹配器 |
+| **root 路径** | Caddy 和 FPM 都挂载了 `../apps:/var/www/apps`，路径从 `<project>/public` 开始 |
+| **php_fastcgi** | `php74:9000` 或 `php83:9000`，按项目需要的 PHP 版本选 |
+| **配置生效** | `caddy reload` 热重载，不停机 |
+
+### 其他站点类型
+
+**静态站点**：
+
+```caddyfile
+    @static host static.local.pandora
+    handle @static {
+        root * /var/www/apps/personal/static-site
+        file_server
+    }
+```
+
+**反向代理**（如 Hyperf Swoole 项目）：
+
+```caddyfile
+    @hyperf host hyperf.local.pandora
+    handle @hyperf {
+        reverse_proxy hyperf-backend:9501
+    }
+```
+
+**前后端分离**（前端静态 + 后端 FPM）：
+
+```caddyfile
+    @split host split.local.pandora
+    handle @split {
+        handle_path /api/* {
+            php_fastcgi php83:9000
+        }
+        handle {
+            root * /var/www/apps/personal/split/frontend
+            file_server
+        }
+    }
+```
+
+### 伪静态（URL Rewrite）
+
+所有请求重写到 `index.php`，Laravel、ThinkPHP 等框架通用。核心是用 `php_fastcgi` 的 `try_files` 子指令代替手写 rewrite 规则。
+
+**Laravel**：
+
+```caddyfile
+    @laravel host laravel.local.pandora
+    handle @laravel {
+        root * /var/www/apps/personal/laravel/public
+        php_fastcgi php83:9000 {
+            try_files {path} /index.php?{query}
+        }
+    }
+```
+
+**ThinkPHP**：
+
+```caddyfile
+    @thinkphp host thinkphp.local.pandora
+    handle @thinkphp {
+        root * /var/www/apps/personal/thinkphp/public
+        php_fastcgi php83:9000 {
+            try_files {path} /index.php?{query}
+        }
+    }
+```
+
+**无 public 目录的项目**（老版 ThinkPHP 等入口在根目录）：
+
+```caddyfile
+    @oldtp host oldtp.local.pandora
+    handle @oldtp {
+        root * /var/www/apps/personal/oldtp
+        php_fastcgi php74:9000 {
+            try_files {path} /index.php?{query}
+        }
+    }
+```
+
+| 框架 | 入口文件 | root 路径 | 规律 |
+|------|---------|-----------|------|
+| Laravel | `public/index.php` | `<project>/public` | `try_files {path} /index.php?{query}` |
+| ThinkPHP 6+ | `public/index.php` | `<project>/public` | 同上 |
+| ThinkPHP 3/5 | `index.php` | `<project>` | 同上，root 少一层 |
+
+> **原理**：`try_files {path} /index.php?{query}` 先尝试请求的实际文件路径，不存在则 Fallback 到 `index.php?{query}`，完全替代 nginx 的 `try_files $uri $uri/ /index.php?$query_string`。
+
+### 线上开启 HTTPS
+
+把 `auto_https off` 改为 `auto_https on` 或直接删除该行（默认开启），Caddy 自动从 Let's Encrypt 签发证书。
+
+> **注意**：`auto_https on` 时不要用 `:80` 块，直接写域名即可（Caddy 会自动处理 HTTP→HTTPS 重定向）。
 
 ---
 
-### 5. Woodpecker — CI/CD 流水线
+## PHP FPM 容器
 
-| 组件 | 镜像 | 端口 | 说明 |
-|------|------|------|------|
-| Server | `woodpeckerci/woodpecker-server:latest` | 8000 | Web 管理端，接收 Webhook，调度任务 |
-| Agent | `woodpeckerci/woodpecker-agent:latest` | — | 执行 CI 任务，需挂载 `docker.sock` |
+每个 PHP 大版本一个容器，通过 `./Dockerfile.php7x` 构建，扩展统一管理：
 
-**Agent 必须能访问 Docker**：挂载了 `/var/run/docker.sock`，用于在宿主机上运行 CI 容器。如果宿主机没有 Docker 或权限不足，Agent 无法工作。
+| 版本 | Dockerfile | 扩展 |
+|------|-----------|------|
+| 7.4 | `Dockerfile.php74` | pdo_mysql, mbstring, gd, zip, exif, pcntl, bcmath + Composer |
+| 8.3 | `Dockerfile.php83` | 同上 + linux-headers |
 
-**独立启动 Woodpecker**：
+所有 FPM 容器挂载 `../apps:/var/www/apps:ro`（只读），源码在宿主机编辑即可。
 
-```bash
-# 如果只需 CI/CD 而不依赖 core 内其他服务
-docker compose -f core/woodpecker/docker-compose.yml up -d
+**新增 PHP 版本**：
+
+1. 创建 `core/Dockerfile.php8x`
+2. 在 `docker-compose.yml` 添加服务（复制 php83 那段，改名字）
+3. 构建并加入 `pandora-net`
+
+---
+
+## MySQL & Redis
+
+- **MySQL 8.0** — 自定义配置见 `mysql/conf.d/custom.cnf`，初始化 SQL 放 `mysql/init/`（仅首次启动执行）
+- **Redis 7** — 配置见 `redis/redis.conf`，默认密码 + AOF 持久化 + 128MB 上限
+
+连接方式（同网络容器）：
+
+```
+host=mysql, port=3306, user=root, password=${MYSQL_ROOT_PASSWORD}
+host=redis, port=6379, password=${REDIS_PASSWORD}
 ```
 
-`core/woodpecker/docker-compose.yml` 使用 `external: true` 接入 `pandora-net`，与主编排共用同一网络。
+---
 
-**首次访问**：
+## DPanel — Docker 管理面板
 
-1. 启动后访问 `http://<host>:8000`
-2. 使用 `WOODPECKER_ADMIN` 指定的用户名登录
-3. 在 Gitea/GitHub 中配置 Webhook 指向 Woodpecker
-4. 在项目中创建 `.woodpecker.yml` 即可触发 CI
+访问 `http://<host>:8807`，可视化管理容器、镜像、网络、数据卷。
+
+---
+
+## Nginx Proxy Manager（备用）
+
+仅 `production` profile 启动，用于线上环境替代 Caddy：
+
+```bash
+docker compose --profile production up -d nginx-proxy-manager
+```
 
 ---
 
 ## 使用方法
 
-### 启动 & 停止
-
 ```bash
-# 启动所有核心服务
-docker compose -f core/docker-compose.yml up -d
+# 启动全部
+cd core && docker compose up -d
 
-# 或通过 Makefile
-make core-up
+# 单独启动
+docker compose up -d caddy php74 php83 mysql redis
 
-# 启动单个服务
-docker compose -f core/docker-compose.yml up -d mysql
+# 查看状态
+docker compose ps
 
-# 仅重新构建并重启（配置变更后）
-docker compose -f core/docker-compose.yml up -d --force-recreate
+# 日志
+docker compose logs -f caddy
+docker compose logs -f php74
 
-# 停止
-docker compose -f core/docker-compose.yml down
-make core-down
-```
-
-### 查看状态 & 日志
-
-```bash
-# 服务状态
-docker compose -f core/docker-compose.yml ps
-
-# 所有日志
-docker compose -f core/docker-compose.yml logs -f
-
-# 单服务日志
-docker compose -f core/docker-compose.yml logs -f mysql
-docker compose -f core/docker-compose.yml logs -f nginx-proxy-manager
-
-# 通过 Makefile
-make logs-core
-```
-
-### 进入容器调试
-
-```bash
-docker exec -it pandora-mysql mysql -u root -p
-docker exec -it pandora-redis redis-cli -a pandora123
-docker exec -it pandora-npm sh
+# 重载 Caddy 配置（修改 Caddyfile 后）
+docker exec caddy caddy reload --config /etc/caddy/Caddyfile
 ```
 
 ---
 
 ## 数据持久化
 
-核心服务创建了以下 Docker 命名卷，`docker compose down` 不会删除：
-
-| 卷名 | 用途 | 挂载点 |
-|------|------|--------|
-| `core_mysql-data` | MySQL 数据文件 | `/var/lib/mysql` |
-| `core_redis-data` | Redis RDB/AOF | `/data` |
-| `core_woodpecker-data` | Woodpecker 数据库 | `/var/lib/woodpecker` |
-| `core_dpanel-data` | DPanel 配置数据 | `/dpanel` |
-| `core_npm-data` | Proxy Manager 配置 | `/data` |
-| `core_npm-letsencrypt` | SSL 证书 | `/etc/letsencrypt` |
-
-> 卷名前缀 `core_` 由 Compose 项目名自动生成。如需清理数据：
-> ```bash
-> docker compose -f core/docker-compose.yml down -v
-> ```
+| 卷名 | 用途 |
+|------|------|
+| `core_mysql-data` | MySQL 数据 |
+| `core_redis-data` | Redis 持久化 |
+| `core_caddy-data` | Caddy 证书/配置 |
+| `core_woodpecker-data` | Woodpecker 数据 |
+| `core_dpanel-data` | DPanel 配置 |
+| `core_npm-data` | NPM 配置 |
+| `core_npm-letsencrypt` | NPM SSL 证书 |
 
 ---
 
-## 网络
+## 添加新项目完整流程
 
-所有核心服务加入 `pandora-net` bridge 网络（主编排自动创建，woodpecker 子编排通过 `external: true` 接入）。
-
-业务项目（`apps/`）的 `docker-compose.yml` 也声明 `pandora-net: external: true`，因此可以**直接用容器名**访问核心服务：
-
-```
-mysql            # 不是 localhost，是容器名
-redis            # 不是 127.0.0.1，是容器名
-pandora-npm
-woodpecker-server
-```
-
----
-
-## 常见问题
-
-### Q: 端口被占用？
-
-修改 `core/docker-compose.yml` 中的 `ports` 映射，例如：
-
-```yaml
-ports:
-  - "3307:3306"   # MySQL 映射到宿主机的 3307
-```
-
-### Q: Woodpecker 无法连接到 Gitea？
-
-确保 `WOODPECKER_GITEA_URL` 中的地址在容器内可达。如果 Gitea 也在 Docker 中且同网络，用容器名；如果在宿主机，用 `host.docker.internal`。
-
-### Q: 添加初始化 SQL 后不生效？
-
-MySQL 的 `/docker-entrypoint-initdb.d/` 只在**数据库数据目录为空时**执行。如果数据已存在，需手动导入：
+以添加一个 PHP 8.3 的 `blog` 项目为例：
 
 ```bash
-docker exec -i pandora-mysql mysql -u root -p${MYSQL_ROOT_PASSWORD} < new-script.sql
+# 1. 创建项目目录和入口文件
+mkdir -p apps/personal/blog/public
+echo '<?php phpinfo();' > apps/personal/blog/public/index.php
+
+# 2. 在 core/Caddyfile 的 :80 {} 块内添加
+#    @blog host blog.local.pandora
+#    handle @blog {
+#        root * /var/www/apps/personal/blog/public
+#        php_fastcgi php83:9000
+#    }
+
+# 3. 重载 Caddy
+docker exec caddy caddy reload --config /etc/caddy/Caddyfile
+
+# 4. 本地 hosts 添加（如需要）
+#    127.0.0.1 blog.local.pandora
+
+# 5. 浏览器访问 http://blog.local.pandora
 ```
