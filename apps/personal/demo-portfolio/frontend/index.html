@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Demo Portfolio - 个人作品集</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .card { background: #fff; padding: 48px 40px; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,.15); text-align: center; max-width: 480px; }
+        h1 { color: #1a1a2e; margin-bottom: 12px; font-size: 28px; }
+        .badge { display: inline-block; background: #e3f2fd; color: #1565c0; padding: 4px 12px; border-radius: 20px; font-size: 12px; margin-bottom: 20px; }
+        p { color: #666; line-height: 1.8; font-size: 14px; }
+        .info { margin-top: 24px; padding: 16px; background: #f8f9fa; border-radius: 8px; font-size: 13px; color: #888; }
+        .info span { display: block; margin: 4px 0; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="badge">personal / demo-portfolio</div>
+        <h1>🎨 Demo Portfolio</h1>
+        <p>个人作品集 — Hyperf Swoole 前后端分离 Demo</p>
+        <div class="info">
+            <span>前端: Nginx Alpine (静态)</span>
+            <span>后端: Hyperf Swoole Server (端口 9501)</span>
+            <span>网关反代: / → frontend:80 | /api → backend:9501</span>
+        </div>
+    </div>
+</body>
+</html>

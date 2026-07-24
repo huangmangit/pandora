@@ -1,0 +1,3 @@
+# A公司项目总编排 — include 所有子公司项目
+include:
+  - demo-admin/docker-compose.yml

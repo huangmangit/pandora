@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Demo Landing - 外包A落地页</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .card { background: #fff; padding: 48px 40px; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,.12); text-align: center; max-width: 480px; }
+        h1 { color: #1a1a2e; margin-bottom: 12px; font-size: 28px; }
+        .badge { display: inline-block; background: #e0f7fa; color: #00838f; padding: 4px 12px; border-radius: 20px; font-size: 12px; margin-bottom: 20px; }
+        p { color: #666; line-height: 1.8; font-size: 14px; }
+        .info { margin-top: 24px; padding: 16px; background: #f8f9fa; border-radius: 8px; font-size: 13px; color: #888; }
+        .info span { display: block; margin: 4px 0; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="badge">outsource-a / demo-landing</div>
+        <h1>🚀 Demo Landing</h1>
+        <p>外包A落地页 — Yii2 FPM 前后端分离 Demo</p>
+        <div class="info">
+            <span>前端: Nginx Alpine (静态)</span>
+            <span>后端: PHP-FPM 8.1 (Yii2)</span>
+            <span>网关反代: / → frontend:80 | /api → backend:9000</span>
+        </div>
+    </div>
+</body>
+</html>

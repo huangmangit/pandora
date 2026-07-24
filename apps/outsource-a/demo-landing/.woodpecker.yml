@@ -1,0 +1,21 @@
+# demo-landing CI/CD 流水线
+pipeline:
+  test:
+    image: pandora-shared/php-fpm:latest
+    commands:
+      - cd backend-yii && composer install --no-dev
+      - echo "Run unit tests..."
+
+  build:
+    image: docker:dind
+    commands:
+      - docker build -t demo-landing-backend:$$CI_COMMIT_SHA ./backend-yii
+      - docker build -t demo-landing-frontend:$$CI_COMMIT_SHA ./frontend
+
+  deploy:
+    image: docker:cli
+    commands:
+      - docker compose -f apps/outsource-a/demo-landing/docker-compose.yml up -d --force-recreate
+
+branches:
+  include: [main, master]

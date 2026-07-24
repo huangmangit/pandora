@@ -1,0 +1,22 @@
+services:
+  demo-portfolio-frontend:
+    build:
+      context: ./frontend
+    container_name: demo-portfolio-frontend
+    restart: always
+    networks:
+      - pandora-net
+
+  demo-portfolio-backend:
+    build:
+      context: ./backend-hyperf
+    container_name: demo-portfolio-backend
+    restart: always
+    volumes:
+      - ./backend-hyperf:/var/www/html
+    networks:
+      - pandora-net
+
+networks:
+  pandora-net:
+    external: true

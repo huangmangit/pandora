@@ -1,0 +1,147 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: pandora-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mysql/conf.d:/etc/mysql/conf.d
+      - ./mysql/init:/docker-entrypoint-initdb.d
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pandora-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: pandora-redis
+    restart: always
+    command: redis-server /usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pandora-net
+
+  caddy:
+    image: caddy:alpine
+    container_name: pandora-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    networks:
+      - pandora-net
+
+  php74:
+    build:
+      context: .
+      dockerfile: Dockerfile.php74
+    container_name: pandora-php74
+    restart: always
+    volumes:
+      - ../apps:/var/www/apps:ro
+    networks:
+      - pandora-net
+
+  php83:
+    build:
+      context: .
+      dockerfile: Dockerfile.php83
+    container_name: pandora-php83
+    restart: always
+    volumes:
+      - ../apps:/var/www/apps:ro
+    networks:
+      - pandora-net
+
+  nginx-proxy-manager:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: pandora-npm
+    restart: always
+    ports:
+      - "${NPM_HTTP_PORT:-8180}:80"
+      - "${NPM_HTTPS_PORT:-8443}:443"
+      - "${NPM_ADMIN_PORT:-8181}:81"
+    volumes:
+      - npm-data:/data
+      - npm-letsencrypt:/etc/letsencrypt
+    networks:
+      - pandora-net
+    profiles:
+      - production
+
+  woodpecker-server:
+    image: woodpeckerci/woodpecker-server:latest
+    container_name: pandora-woodpecker-server
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - woodpecker-data:/var/lib/woodpecker
+    environment:
+      WOODPECKER_HOST: ${WOODPECKER_HOST}
+      WOODPECKER_GITEA_URL: ${WOODPECKER_GITEA_URL}
+      WOODPECKER_AGENT_SECRET: ${WOODPECKER_AGENT_SECRET}
+      WOODPECKER_ADMIN: ${WOODPECKER_ADMIN}
+    networks:
+      - pandora-net
+
+  woodpecker-agent:
+    image: woodpeckerci/woodpecker-agent:latest
+    container_name: pandora-woodpecker-agent
+    restart: always
+    depends_on:
+      - woodpecker-server
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      WOODPECKER_SERVER: woodpecker-server:9000
+      WOODPECKER_AGENT_SECRET: ${WOODPECKER_AGENT_SECRET}
+    networks:
+      - pandora-net
+
+  dpanel:
+    image: dpanel/dpanel:latest
+    container_name: pandora-dpanel
+    restart: always
+    ports:
+      - "${DPANEL_PORT:-8807}:8080"
+    environment:
+      APP_NAME: pandora-dpanel
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - dpanel-data:/dpanel
+    networks:
+      - pandora-net
+
+networks:
+  pandora-net:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  redis-data:
+  woodpecker-data:
+  dpanel-data:
+  caddy-data:
+  npm-data:
+  npm-letsencrypt:

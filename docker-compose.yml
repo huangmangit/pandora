@@ -1,0 +1,20 @@
+# ============================================================
+# Pandora Docker 部署 — 顶层入口
+# 通过 include 引入各分组文件，docker compose 命令不变
+# ============================================================
+#
+# 分组文件：
+#   core/docker-compose.yml              核心基础服务
+#   apps/personal/docker-compose.yml      个人项目
+#   apps/company-a/docker-compose.yml     A公司项目
+#   apps/outsource-a/docker-compose.yml   外包A项目
+#
+# 启动：
+#   docker compose up -d                  # 全量启动
+#   docker compose -f core/docker-compose.yml up -d  # 仅核心
+
+include:
+  - core/docker-compose.yml
+  - apps/personal/docker-compose.yml
+  - apps/company-a/docker-compose.yml
+  - apps/outsource-a/docker-compose.yml

@@ -1,0 +1,18 @@
+# Pandora — Caddy 统一网关
+{
+    auto_https off
+}
+
+# PHP 7.4 Demo
+php74.local.pandora {
+    php_fastcgi php74:9000 {
+        root /var/www/apps/personal/demo-php74/public
+    }
+}
+
+# PHP 8.3 Demo
+php83.local.pandora {
+    php_fastcgi php83:9000 {
+        root /var/www/apps/personal/demo-php83/public
+    }
+}

@@ -1,0 +1,22 @@
+services:
+  demo-landing-frontend:
+    build:
+      context: ./frontend
+    container_name: demo-landing-frontend
+    restart: always
+    networks:
+      - pandora-net
+
+  demo-landing-backend:
+    build:
+      context: ./backend-yii
+    container_name: demo-landing-backend
+    restart: always
+    volumes:
+      - ./backend-yii:/var/www/html
+    networks:
+      - pandora-net
+
+networks:
+  pandora-net:
+    external: true

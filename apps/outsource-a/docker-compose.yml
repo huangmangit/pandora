@@ -1,0 +1,3 @@
+# 外包A项目总编排 — include 所有外包子项目
+include:
+  - demo-landing/docker-compose.yml

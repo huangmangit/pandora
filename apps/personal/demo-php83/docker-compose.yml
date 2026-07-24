@@ -1,0 +1,15 @@
+services:
+  demo-php83:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: demo-php83
+    restart: always
+    volumes:
+      - ./public:/var/www/html
+    networks:
+      - pandora-net
+
+networks:
+  pandora-net:
+    external: true
