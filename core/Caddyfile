@@ -3,13 +3,13 @@
 }
 
 :80 {
-	@php74 host php74.local.pandora
+	@php74 host php74.local.test
 	handle @php74 {
 		root * /var/www/apps/personal/demo-php74/public
 		php_fastcgi php74:9000
 	}
 
-	@php83 host php83.local.pandora
+	@php83 host php83.local.test
 	handle @php83 {
 		root * /var/www/apps/personal/demo-php83/public
 		php_fastcgi php83:9000
