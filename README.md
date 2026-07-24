@@ -1,6 +1,6 @@
 # Pandora — 统一容器化部署平台
 
-> 造船厂：所有项目从构建到部署的完整容器化方案，基于 Docker Compose + Woodpecker CI/CD。
+> 造船厂：所有项目从构建到部署的完整容器化方案，基于 Docker Compose + Caddy + Woodpecker CI/CD。
 
 ---
 
@@ -9,348 +9,229 @@
 ```
 pandora/
 │
-├── core/                                    # ═══ 核心基础服务（很少变动） ═══
-│   ├── docker-compose.yml                   #     MySQL、Redis、Nginx 网关、Woodpecker
-│   ├── .env                                 #     基础服务环境变量
+├── core/                                    # ═══ 核心基础服务 ═══
+│   ├── docker-compose.yml                   #     Caddy + PHP-FPM + MySQL + Redis + DPanel + Woodpecker
+│   ├── Caddyfile                            #     统一网关配置（所有站点在此管理）
+│   ├── Dockerfile.php74                     #     PHP 7.4 FPM 镜像
+│   ├── Dockerfile.php83                     #     PHP 8.3 FPM 镜像
+│   ├── .env                                 #     环境变量
 │   ├── mysql/
-│   │   ├── conf.d/                          #     自定义 MySQL 配置
-│   │   └── init/                            #     初始化 SQL 脚本
+│   │   ├── conf.d/                          #     自定义配置
+│   │   └── init/                            #     初始化 SQL
 │   ├── redis/
 │   │   └── redis.conf
-│   ├── nginx-gateway/                       #     统一网关（反代到所有项目容器）
-│   │   ├── nginx.conf
-│   │   └── conf.d/
-│   │       ├── personal/                    #     个人项目反代规则
-│   │       ├── company/                     #     公司项目反代规则
-│   │       └── outsource/                   #     外包项目反代规则
-│   └── woodpecker/                          #     Woodpecker CI/CD
-│       ├── docker-compose.yml
-│       └── data/
+│   └── woodpecker/                          #     CI/CD 服务
 │
-├── apps/                                    # ═══ 业务项目（按归属分组） ═══
-│   │
+├── apps/                                    # ═══ 业务项目 ═══
 │   ├── personal/                            # ── 个人项目 ──
-│   │   ├── docker-compose.yml               #     个人项目总编排（include 各子项目）
-│   │   └── <project-name>/
-│   │       ├── frontend/                    #     前端项目（Vue/React）
-│   │       ├── backend-yii/                 #     后端 Yii2（PHP-FPM，纯容器，无需 Nginx）
-│   │       ├── docker-compose.yml           #     本项目容器编排
-│   │       └── .woodpecker.yml              #     本项目 CI/CD 流水线
-│   │
+│   │   ├── docker-compose.yml               #     个人项目编排
+│   │   ├── demo-php74/public/               #     PHP 7.4 Demo（纯源码，无容器）
+│   │   ├── demo-php83/public/               #     PHP 8.3 Demo（纯源码，无容器）
+│   │   └── ...
 │   ├── company-a/                           # ── A公司项目 ──
-│   │   ├── docker-compose.yml               #     A公司总编排（include 各子项目）
-│   │   ├── admin/                           #     后台管理系统
-│   │   │   ├── frontend/
-│   │   │   ├── backend-yii/
-│   │   │   ├── docker-compose.yml
-│   │   │   └── .woodpecker.yml
-│   │   ├── mall/                            #     商城
-│   │   │   ├── frontend-h5/
-│   │   │   ├── backend-yii/
-│   │   │   ├── miniapp/                     #     微信小程序源码（不参与 Docker）
-│   │   │   ├── docker-compose.yml
-│   │   │   └── .woodpecker.yml
-│   │   └── user-center/                     #     用户中心
-│   │       ├── backend-hyperf/              #     Hyperf（自带 Swoole Server，无需 Nginx）
-│   │       ├── docker-compose.yml
-│   │       └── .woodpecker.yml
-│   │
+│   │   ├── docker-compose.yml
+│   │   └── ...
 │   ├── company-b/                           # ── B公司项目 ──
-│   │   ├── docker-compose.yml
-│   │   └── ...
-│   │
 │   ├── outsource-a/                         # ── 外包A ──
-│   │   ├── docker-compose.yml
-│   │   └── ...
-│   │
 │   └── outsource-b/                         # ── 外包B ──
-│       ├── docker-compose.yml
-│       └── ...
 │
-├── shared/                                   # ═══ 跨项目共享资源 ═══
+├── shared/                                  # ═══ 跨项目共享 ═══
 │   ├── docker/
-│   │   ├── php-fpm.Dockerfile               #     Yii 项目通用 PHP-FPM 镜像
-│   │   └── hyperf.Dockerfile                #     Hyperf 项目通用镜像
-│   └── scripts/
-│       └── deploy.sh                        #     公共部署脚本
+│   │   ├── php-fpm.Dockerfile               #     PHP 8.1 模板
+│   │   └── hyperf.Dockerfile                #     Hyperf 镜像
+│   └── scripts/deploy.sh
 │
-├── docker-compose.yml                        # ═══ 顶层入口（include 所有分组） ═══
-├── Makefile                                  #     统一命令入口
-└── README.md                                 #     本文件
+├── docker-compose.yml                       # ═══ 顶层入口（include 所有分组） ═══
+├── Makefile
+└── README.md
 ```
 
 ---
 
 ## 设计理念
 
-### 核心原则
-
 | 原则 | 说明 |
 |------|------|
-| **基础服务集中管理** | MySQL、Redis、Nginx 网关、Woodpecker 统一放在 `core/`，一次部署长期运行 |
-| **业务项目按主体分组** | `apps/` 下按 personal / company-a / company-b / outsource-a / outsource-b 分组，权限和关注点清晰分离 |
-| **三层 include 聚合** | 顶层 → 分组 → 项目，逐层 `include`，灵活选择启动粒度 |
-| **统一网关** | Nginx Gateway 作为唯一入口，FPM 项目不再内嵌 Nginx，减少容器数量 |
-| **类型适配** | Yii2（FPM）项目通过网关反代到 9000 端口；Hyperf 自带 Server 直接暴露 |
+| **基础服务集中管理** | Caddy、MySQL、Redis、FPM 统一放 `core/`，一次部署长期运行 |
+| **PHP 版本即容器** | FPM 项目不建独立容器——每个 PHP 大版本一个容器，所有同版项目共享 |
+| **Caddy 统一网关** | `core/Caddyfile` 管理全部站点，3 行配置一个域名，`caddy reload` 热重载 |
+| **源码与容器分离** | `apps/` 只放项目源码，FPM 和 Caddy 通过 volume 挂载共用 |
 
-### include 分层架构
+### 核心架构
 
 ```
-docker-compose.yml                     # 顶层 — include 所有分组
-│
-├── include core/docker-compose.yml    #    核心基础服务
-│
-├── include apps/personal/docker-compose.yml
-│   ├── include <project>/docker-compose.yml
-│   └── include <project>/docker-compose.yml
-│
-├── include apps/company-a/docker-compose.yml
-│   ├── include admin/docker-compose.yml
-│   ├── include mall/docker-compose.yml
-│   └── include user-center/docker-compose.yml
-│
-├── include apps/company-b/docker-compose.yml
-│   └── ...
-│
-├── include apps/outsource-a/docker-compose.yml
-│   └── ...
-│
-└── include apps/outsource-b/docker-compose.yml
-    └── ...
-```
+                         caddy (:80/:443)
+                              │
+         ┌────────────────────┼────────────────────┐
+         ▼                    ▼                    ▼
+      php74                 php83              静态/反代
+   (PHP-FPM 7.4)        (PHP-FPM 8.3)       (Hyperf 等)
+         │                    │
+         └──────────┬─────────┘
+                    │
+             mysql (:3306)
+             redis (:6379)
 
-每一层都可以独立启动：
-
-```bash
-# 全量启动
-docker compose up -d
-
-# 只启动核心服务
-docker compose -f core/docker-compose.yml up -d
-
-# 只启动 A公司所有项目
-docker compose -f apps/company-a/docker-compose.yml up -d
-
-# 只启动 A公司 admin 项目
-docker compose -f apps/company-a/admin/docker-compose.yml up -d
+    所有容器加入 pandora-net（bridge），容器名直连。
+    apps/ 源码同时挂载到 Caddy 和所有 FPM 容器，路径一致。
 ```
 
 ---
 
-## 网络拓扑
+## 快速开始
 
-```
-                     ┌──────────────────────────────────┐
-                     │   Nginx Gateway (:80 / :443)      │
-                     │    (core/nginx-gateway)            │
-                     └──────┬────────┬────────┬──────────┘
-                            │        │        │
-                ┌───────────┘  ┌─────┘        └───────────┐
-                ▼              ▼                          ▼
-      ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐
-      │ admin       │  │ mall        │  │ user-center         │
-      │ frontend:80 │  │ frontend:80 │  │ backend-hyperf:9501 │
-      │ backend:9000│  │ backend:9000│  │   [自带 Server]      │
-      │  [PHP-FPM]   │  │  [PHP-FPM]   │  └─────────────────────┘
-      └──────┬──────┘  └──────┬──────┘
-             │                │
-             └───────┬────────┘
-                     ▼
-      ┌──────────────────────────────────┐
-      │    core: MySQL :3306             │
-      │    core: Redis :6379             │
-      │    core: Woodpecker :8000        │
-      └──────────────────────────────────┘
+```bash
+# 1. 启动核心服务
+cd core && docker compose up -d
 
-      所有容器加入统一 Docker Network: pandora-net
-      容器间通过容器名直接通信
+# 2. 访问 Demo 站点（需配 hosts: 127.0.0.1 php74.local.pandora）
+open http://php74.local.pandora   # PHP 7.4 phpinfo
+open http://php83.local.pandora   # PHP 8.3 phpinfo
+
+# 3. 管理面板
+open http://localhost:8807         # DPanel — Docker 可视化管理
+open http://localhost:8000         # Woodpecker — CI/CD 管理
 ```
 
 ---
 
-## 容器角色分类
+## 添加项目
 
-### core — 核心基础服务
+### FPM 项目（Laravel / ThinkPHP / Yii2）
 
-| 服务 | 镜像 | 端口 | 说明 |
-|------|------|------|------|
-| MySQL | `mysql:8.0` | 3306 | 数据持久化到 volume |
-| Redis | `redis:7-alpine` | 6379 | 缓存 & 队列 |
-| Nginx Gateway | `nginx:alpine` | 80 / 443 | 统一入口，反代到各项目容器 |
-| Woodpecker Server | `woodpeckerci/woodpecker-server` | 8000 | CI/CD 管理端 |
-| Woodpecker Agent | `woodpeckerci/woodpecker-agent` | — | 执行 CI 任务 |
-
-### apps — 业务项目容器
-
-| 项目类型 | 需要的容器 | 说明 |
-|----------|-----------|------|
-| 纯前端 (Vue/React) | 1 个前端静态服务容器 | Nginx/Alpine serve 静态文件 |
-| Yii2 (FPM) | 1 个 PHP-FPM 容器 | 通过网关 Nginx 反代到 `:9000` |
-| Hyperf | 1 个 Swoole 容器 | 自带 HTTP Server，直接暴露端口 |
-| 前后端分离 | 前端容器 + 后端容器 | 各自独立，网关统一路由 |
-
----
-
-## 部署方式
-
-### 开发环境 — 一键全起
+只需放源码 + 在 `Caddyfile` 加 4 行：
 
 ```bash
-# 根目录 — 顶层 docker-compose.yml 使用 include 聚合所有分组
-docker compose up -d
+# 1. 创建项目目录，放源码
+mkdir -p apps/personal/my-blog/public
+echo '<?php phpinfo();' > apps/personal/my-blog/public/index.php
+
+# 2. 编辑 core/Caddyfile，在 :80 {} 块内添加：
+#    @myblog host myblog.local.pandora
+#    handle @myblog {
+#        root * /var/www/apps/personal/my-blog/public
+#        php_fastcgi php83:9000
+#    }
+
+# 3. 热重载 Caddy
+docker exec caddy caddy reload --config /etc/caddy/Caddyfile
+
+# 4. 访问
+open http://myblog.local.pandora
 ```
 
-### 按需独立部署
+### 伪静态（Laravel / ThinkPHP）
 
-```bash
-# 先起核心服务（仅一次）
-docker compose -f core/docker-compose.yml up -d
+只需在 `php_fastcgi` 后加 `try_files`：
 
-# 按主体启动
-docker compose -f apps/company-a/docker-compose.yml up -d
-docker compose -f apps/company-b/docker-compose.yml up -d
-docker compose -f apps/outsource-a/docker-compose.yml up -d
-
-# 只启动某个具体项目
-docker compose -f apps/company-a/admin/docker-compose.yml up -d
+```caddyfile
+php_fastcgi php83:9000 {
+    try_files {path} /index.php?{query}
+}
 ```
 
-### 添加新项目
+### Hyperf / Swoole 项目（自带 HTTP Server）
 
-```bash
-# 1. 创建项目目录（以 A公司新项目为例）
-mkdir -p apps/company-a/new-project/{frontend,backend-yii}
+项目需要自己的 `docker-compose.yml`，Caddy 只需一行反代：
 
-# 2. 编写项目 Dockerfile（可基于 shared/docker/php-fpm.Dockerfile）
-# 3. 编写项目 docker-compose.yml
-# 4. 编写 .woodpecker.yml
-
-# 5. 在分组 compose 文件中 include 新项目
-#    apps/company-a/docker-compose.yml → include: new-project/docker-compose.yml
-
-# 6. 在 core/nginx-gateway/conf.d/ 添加反代规则
-# 7. 重载网关
-docker compose -f core/docker-compose.yml restart nginx-gateway
+```caddyfile
+handle @hyperf {
+    reverse_proxy hyperf-backend:9501
+}
 ```
 
-### 添加新主体分组
+### 前端静态项目
 
-```bash
-# 1. 创建分组目录和总编排
-mkdir -p apps/new-client
-# 2. 编写分组 docker-compose.yml，include 各子项目
-# 3. 在顶层 docker-compose.yml 中 include 新分组
-#    include: apps/new-client/docker-compose.yml
-# 4. 在 core/nginx-gateway/conf.d/ 添加对应反代规则目录
+```caddyfile
+handle @static {
+    root * /var/www/apps/personal/static-site
+    file_server
+}
 ```
 
 ---
 
-## CI/CD 流程（Woodpecker）
+## 服务一览
 
-### 流水线设计（以 Yii2 项目为例）
-
-```yaml
-# .woodpecker.yml
-steps:
-  - name: test
-    image: shared/php-fpm:latest
-    commands:
-      - composer install --no-dev
-      - php vendor/bin/phpunit
-
-  - name: build
-    image: docker:dind
-    commands:
-      - docker build -t registry.company.com/admin-backend:$CI_COMMIT_SHA .
-      - docker push registry.company.com/admin-backend:$CI_COMMIT_SHA
-
-  - name: deploy
-    image: docker:cli
-    commands:
-      - docker compose -f apps/company-a/admin/docker-compose.yml pull
-      - docker compose -f apps/company-a/admin/docker-compose.yml up -d --force-recreate
-```
-
-### 触发策略
-
-| 事件 | 行为 |
-|------|------|
-| Push to `main` / `master` | 测试 → 构建 → 部署到测试环境 |
-| Tag `v*` | 测试 → 构建 → 部署到生产环境 |
-| Pull Request | 仅跑测试 & Lint |
+| 服务 | 容器名 | 端口 | 说明 |
+|------|--------|------|------|
+| Caddy | `caddy` | 80, 443 | 统一网关，`Caddyfile` 管理站点 |
+| PHP 7.4 | `php74` | 9000（内部） | FPM，挂载 `../apps` |
+| PHP 8.3 | `php83` | 9000（内部） | FPM，挂载 `../apps` |
+| MySQL | `mysql` | 3306 | `mysql:8.0`，自动建库 |
+| Redis | `redis` | 6379 | `redis:7-alpine` |
+| DPanel | `dpanel` | 8807 | Docker 可视化管理 |
+| Woodpecker Server | `woodpecker-server` | 8000 | CI/CD 管理端 |
+| Woodpecker Agent | `woodpecker-agent` | — | CI 执行器 |
+| Nginx Proxy Manager | `nginx-proxy-manager` | 8180（备用） | 仅 `--profile production` 启动 |
 
 ---
 
-## 常用命令（Makefile）
+## 常用命令
 
-```makefile
+```bash
 # 核心服务
-make core-up          # 启动核心服务
-make core-down        # 停止核心服务
+cd core
+docker compose up -d                    # 启动全部
+docker compose up -d caddy php83 mysql  # 指定服务
+docker compose ps                       # 查看状态
+docker compose logs -f caddy            # 查看日志
 
-# 分组操作
-make up GROUP=company-a       # 启动指定分组所有项目
-make down GROUP=company-a     # 停止指定分组
-make restart GROUP=company-a  # 重启指定分组
+# 重载 Caddy 配置（修改 Caddyfile 后）
+docker exec caddy caddy reload --config /etc/caddy/Caddyfile
 
-# 单个项目
-make up PROJECT=admin                # 启动指定项目
-make down PROJECT=admin              # 停止指定项目
+# 按分组启动
+docker compose -f apps/personal/docker-compose.yml up -d
 
-# 全局
-make up-all            # 启动所有服务
-make down-all          # 停止所有服务
-make ps                # 查看所有容器状态
-
-# 日志
-make logs PROJECT=admin  # 查看指定项目日志
-make logs-core           # 查看核心服务日志
+# 进入容器
+docker exec -it mysql mysql -u root -p
+docker exec -it redis redis-cli
+docker exec -it php83 sh
 ```
 
 ---
 
-## 环境变量管理
+## 网络
 
-### core/.env（核心服务）
+所有容器加入 `pandora-net`（bridge），容器名即 hostname：
 
-```env
-# MySQL
-MYSQL_ROOT_PASSWORD=changeme
-MYSQL_DATABASE=pandora
-
-# Redis
-REDIS_PASSWORD=changeme
-
-# Woodpecker
-WOODPECKER_HOST=http://ci.company.local
-WOODPECKER_GITEA_URL=http://git.company.local
 ```
-
-### 项目级 .env（各项目独立）
-
-```env
-# apps/company-a/admin/.env
-APP_ENV=production
-DB_HOST=mysql
-DB_PORT=3306
-DB_DATABASE=admin
-DB_USERNAME=admin
-DB_PASSWORD=changeme
-REDIS_HOST=redis
-REDIS_PORT=6379
+Caddyfile 中写 php83:9000 → 自动解析到 pandora-php83 容器
+项目 .env 中写 DB_HOST=mysql → 自动解析到 pandora-mysql 容器
 ```
 
 ---
 
-## 待办事项
+## 环境变量
 
-- [ ] 编写 `shared/docker/php-fpm.Dockerfile` 基础镜像
-- [ ] 编写 `shared/docker/hyperf.Dockerfile` 基础镜像
-- [ ] 编写 `core/docker-compose.yml` 核心服务编排
-- [ ] 编写 `core/nginx-gateway/` 网关配置模板
-- [ ] 编写 `core/woodpecker/docker-compose.yml` CI/CD 服务
-- [ ] 编写顶层 `docker-compose.yml`（include 所有分组）
-- [ ] 编写各分组 `docker-compose.yml`（include 各子项目）
-- [ ] 编写 `Makefile` 统一命令入口
-- [ ] 迁移现有项目到 `apps/` 下
+主要配置集中在 `core/.env`：
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `MYSQL_ROOT_PASSWORD` | MySQL root 密码 | `pandora123` |
+| `MYSQL_DATABASE` | 默认数据库 | `pandora` |
+| `REDIS_PASSWORD` | Redis 密码 | `pandora123` |
+| `WOODPECKER_HOST` | CI 访问地址 | `http://localhost:8000` |
+| `WOODPECKER_AGENT_SECRET` | CI 通信密钥 | 请修改 |
+| `DPANEL_PORT` | DPanel 面板端口 | `8807` |
+
+---
+
+## 线上部署
+
+本地用 Caddy，线上可选切到 Nginx Proxy Manager：
+
+```bash
+# 线上启动 NPM（需先停掉 caddy 释放 80/443）
+docker compose stop caddy
+cd core && docker compose --profile production up -d nginx-proxy-manager
+```
+
+NPM 管理界面：`http://<host>:8181`，默认账号 `admin@example.com` / `changeme`。
+
+---
+
+## 更多
+
+- [Caddy 站点配置详解](core/README.md)（伪静态、HTTPS、前后端分离等）
+- CI/CD 流程见各项目 `.woodpecker.yml`
