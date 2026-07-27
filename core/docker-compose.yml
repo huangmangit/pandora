@@ -1,6 +1,6 @@
 services:
   mysql:
-    image: mariadb:latest
+    image: mariadb:11.8
     container_name: mysql
     restart: always
     environment:
@@ -140,6 +140,7 @@ services:
     environment:
       WOODPECKER_SERVER: woodpecker-server:9000
       WOODPECKER_AGENT_SECRET: ${WOODPECKER_AGENT_SECRET}
+      WOODPECKER_MAX_PROCS: 2
     networks:
       - pandora-net
 
