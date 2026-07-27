@@ -2,3 +2,4 @@
 include:
   - demo-blog/docker-compose.yml
   - demo-portfolio/docker-compose.yml
+  - maxadmin/docker-compose.yml

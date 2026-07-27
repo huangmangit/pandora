@@ -12,11 +12,5 @@ core/openresty/data/*
 core/woodpecker/data/*
 !core/woodpecker/data/.gitkeep
 
-# FPM demo 中已废弃的独立容器文件（由 core 统一管理）
-apps/personal/demo-php74/.env
-apps/personal/demo-php74/Dockerfile
-apps/personal/demo-php74/docker-compose.yml
-apps/personal/demo-php83/.env
-apps/personal/demo-php83/Dockerfile
-apps/personal/demo-php83/docker-compose.yml
+apps/*
 core/.env
