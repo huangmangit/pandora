@@ -45,7 +45,7 @@ services:
       - pandora-net
 
   openresty:
-    image: uusec/openresty-manager:latest
+    image: uusec/openresty-manager:2.4.2
     container_name: openresty
     restart: always
     ports:
@@ -87,7 +87,7 @@ services:
       - pandora-net
 
   dpanel:
-    image: dpanel/dpanel:latest
+    image: dpanel/dpanel:1.10.6
     container_name: dpanel
     restart: always
     ports:
@@ -100,9 +100,8 @@ services:
     networks:
       - pandora-net
 
-
   woodpecker-server:
-    image: woodpeckerci/woodpecker-server:latest
+    image: woodpeckerci/woodpecker-server:v3.16.0
     container_name: woodpecker-server
     restart: always
     ports:
@@ -110,14 +109,14 @@ services:
     volumes:
       - woodpecker-data:/var/lib/woodpecker
     environment:
-       # ⚠️ 必须：你的外部访问地址 (例如 https://ci.yourdomain.com 或 http://公网IP:8000)
+      # ⚠️ 必须：你的外部访问地址 (例如 https://ci.yourdomain.com 或 http://公网IP:8000)
       WOODPECKER_HOST: ${WOODPECKER_HOST}
-      
+
       # ⚠️ 必须：Agent 连接 Server 的密钥 (随便生成一个长字符串)
       WOODPECKER_AGENT_SECRET: ${WOODPECKER_AGENT_SECRET}
-      
+
       # ⚠️ 必须：指定第一次登录时自动成为管理员的 GitHub 用户名
-      WOODPECKER_ADMIN: ${WOODPECKER_ADMIN} 
+      WOODPECKER_ADMIN: ${WOODPECKER_ADMIN}
 
       # ==========================================
       # 🚀 GitHub OAuth 专属配置 (替换原来的 Gitea)
@@ -130,7 +129,7 @@ services:
       - pandora-net
 
   woodpecker-agent:
-    image: woodpeckerci/woodpecker-agent:latest
+    image: woodpeckerci/woodpecker-agent:v3.16.0
     container_name: woodpecker-agent
     restart: always
     depends_on:
