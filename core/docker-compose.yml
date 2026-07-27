@@ -38,17 +38,23 @@ services:
     networks:
       - pandora-net
 
-  caddy:
-    image: caddy:alpine
-    container_name: caddy
+  openresty:
+    image: uusec/openresty-manager:2.4.2
+    container_name: openresty
     restart: always
     ports:
       - "80:80"
       - "443:443"
+      - "${OPENRESTY_MANAGER_PORT:-8808}:34567"
+    environment:
+      TZ: Asia/Shanghai
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock
       - ../apps:/var/www/apps:ro
-      - caddy-data:/data
+      - ./openresty/acme:/opt/om/acme
+      - ./openresty/data:/opt/om/data
+      - ./openresty/conf:/opt/om/nginx/conf
     networks:
       - pandora-net
 
@@ -88,21 +94,6 @@ services:
     networks:
       - pandora-net
 
-  nginx-proxy-manager:
-    image: jc21/nginx-proxy-manager:latest
-    container_name: nginx-proxy-manager
-    restart: always
-    ports:
-      - "${NPM_HTTP_PORT:-8180}:80"
-      - "${NPM_HTTPS_PORT:-8443}:443"
-      - "${NPM_ADMIN_PORT:-8181}:81"
-    volumes:
-      - npm-data:/data
-      - npm-letsencrypt:/etc/letsencrypt
-    networks:
-      - pandora-net
-    profiles:
-      - production
 
   woodpecker-server:
     image: woodpeckerci/woodpecker-server:latest
@@ -136,13 +127,10 @@ services:
 
 networks:
   pandora-net:
-    driver: bridge
+    external: true
 
 volumes:
   mysql-data:
   redis-data:
   woodpecker-data:
   dpanel-data:
-  caddy-data:
-  npm-data:
-  npm-letsencrypt:
