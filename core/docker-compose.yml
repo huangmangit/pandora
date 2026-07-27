@@ -45,7 +45,7 @@ services:
       - pandora-net
 
   openresty:
-    image: uusec/openresty-manager:2.4.2
+    image: uusec/openresty-manager:latest
     container_name: openresty
     restart: always
     ports:
@@ -110,10 +110,22 @@ services:
     volumes:
       - woodpecker-data:/var/lib/woodpecker
     environment:
+       # ⚠️ 必须：你的外部访问地址 (例如 https://ci.yourdomain.com 或 http://公网IP:8000)
       WOODPECKER_HOST: ${WOODPECKER_HOST}
-      WOODPECKER_GITEA_URL: ${WOODPECKER_GITEA_URL}
+      
+      # ⚠️ 必须：Agent 连接 Server 的密钥 (随便生成一个长字符串)
       WOODPECKER_AGENT_SECRET: ${WOODPECKER_AGENT_SECRET}
-      WOODPECKER_ADMIN: ${WOODPECKER_ADMIN}
+      
+      # ⚠️ 必须：指定第一次登录时自动成为管理员的 GitHub 用户名
+      WOODPECKER_ADMIN: ${WOODPECKER_ADMIN} 
+
+      # ==========================================
+      # 🚀 GitHub OAuth 专属配置 (替换原来的 Gitea)
+      # ==========================================
+      WOODPECKER_GITHUB: "true"
+      WOODPECKER_GITHUB_CLIENT: ${WOODPECKER_GITHUB_CLIENT}
+      WOODPECKER_GITHUB_SECRET: ${WOODPECKER_GITHUB_SECRET}
+      # 注意：如果是公共 GitHub，不需要配 WOODPECKER_GITHUB_URL。如果是 GitHub Enterprise 才需要。
     networks:
       - pandora-net
 
