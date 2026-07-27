@@ -19,3 +19,4 @@ apps/personal/demo-php74/docker-compose.yml
 apps/personal/demo-php83/.env
 apps/personal/demo-php83/Dockerfile
 apps/personal/demo-php83/docker-compose.yml
+core/.env
