@@ -64,6 +64,7 @@ services:
     restart: always
     ports:
       - "8000:8000"
+      - "9000:9000"
     volumes:
       - woodpecker-data:/var/lib/woodpecker
     environment:
@@ -92,6 +93,7 @@ services:
     restart: always
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./woodpecker/agent-data:/etc/woodpecker
     environment:
       WOODPECKER_SERVER: ${WOODPECKER_SERVER}
       WOODPECKER_AGENT_SECRET: ${WOODPECKER_AGENT_SECRET}
