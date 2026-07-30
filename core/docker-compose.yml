@@ -91,7 +91,7 @@ services:
     container_name: woodpecker-agent
     restart: always
     depends_on:
-      - woodpecker-server
+      # - woodpecker-server
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
