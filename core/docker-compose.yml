@@ -98,6 +98,8 @@ services:
       WOODPECKER_SERVER: woodpecker-server:9000
       WOODPECKER_AGENT_SECRET: ${WOODPECKER_AGENT_SECRET}
       WOODPECKER_MAX_PROCS: 2
+      # 新增这一行！给这台机器打上唯一的身份标签
+      WOODPECKER_FILTER_LABELS: "node=${WOODPECKER_AGENT_LABEL}" 
     networks:
       - 1panel-network
 
