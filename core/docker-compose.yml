@@ -95,7 +95,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      WOODPECKER_SERVER: woodpecker-server:9000
+      WOODPECKER_SERVER: ${WOODPECKER_SERVER}
       WOODPECKER_AGENT_SECRET: ${WOODPECKER_AGENT_SECRET}
       WOODPECKER_MAX_PROCS: 2
       # 新增这一行！给这台机器打上唯一的身份标签
