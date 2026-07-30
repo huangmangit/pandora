@@ -24,10 +24,10 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - pandora-net
+      - 1panel-network
 
   redis:
-    image: redis:7-alpine
+    image: redis:8.8.1
     container_name: redis
     restart: always
     command: redis-server /usr/local/etc/redis/redis.conf
@@ -42,49 +42,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - pandora-net
-
-  openresty:
-    image: uusec/openresty-manager:2.4.2
-    container_name: openresty
-    restart: always
-    ports:
-      - "80:80"
-      - "443:443"
-      - "${OPENRESTY_MANAGER_PORT:-8808}:34567"
-    environment:
-      TZ: Asia/Shanghai
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ../apps:/var/www/apps:ro
-      - ./openresty/acme:/opt/om/acme
-      - ./openresty/data:/opt/om/data
-      - ./openresty/conf:/opt/om/nginx/conf
-    networks:
-      - pandora-net
-
-  php74:
-    build:
-      context: .
-      dockerfile: Dockerfile.php74
-    container_name: php74
-    restart: always
-    volumes:
-      - ../apps:/var/www/apps:ro
-    networks:
-      - pandora-net
-
-  php83:
-    build:
-      context: .
-      dockerfile: Dockerfile.php83
-    container_name: php83
-    restart: always
-    volumes:
-      - ../apps:/var/www/apps:ro
-    networks:
-      - pandora-net
+      - 1panel-network
 
   dpanel:
     image: dpanel/dpanel:1.10.6
@@ -98,7 +56,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - dpanel-data:/dpanel
     networks:
-      - pandora-net
+      - 1panel-network
 
   woodpecker-server:
     image: woodpeckerci/woodpecker-server:v3.16.0
@@ -126,7 +84,7 @@ services:
       WOODPECKER_GITHUB_SECRET: ${WOODPECKER_GITHUB_SECRET}
       # 注意：如果是公共 GitHub，不需要配 WOODPECKER_GITHUB_URL。如果是 GitHub Enterprise 才需要。
     networks:
-      - pandora-net
+      - 1panel-network
 
   woodpecker-agent:
     image: woodpeckerci/woodpecker-agent:v3.16.0
@@ -141,10 +99,10 @@ services:
       WOODPECKER_AGENT_SECRET: ${WOODPECKER_AGENT_SECRET}
       WOODPECKER_MAX_PROCS: 2
     networks:
-      - pandora-net
+      - 1panel-network
 
 networks:
-  pandora-net:
+  1panel-network:
     external: true
 
 volumes:

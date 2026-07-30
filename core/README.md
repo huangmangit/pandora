@@ -35,7 +35,7 @@
              mysql (:3306)
              redis (:6379)
 
-   所有容器加入 pandora-net（bridge），容器名直连。
+   所有容器加入 1panel-network（bridge），容器名直连。
    apps/ 源码同时挂载到 openresty 和所有 FPM 容器，路径一致。
 ```
 
@@ -140,7 +140,7 @@ host=redis, port=6379, password=${REDIS_PASSWORD}
 
 ```bash
 # 首次：创建共享网络（仅一次）
-docker network create pandora-net
+docker network create 1panel-network
 
 # 启动全部核心服务
 cd core && docker compose up -d

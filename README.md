@@ -103,7 +103,7 @@ pandora/
              mysql (:3306)
              redis (:6379)
 
-    所有容器加入 pandora-net（bridge），容器名直连。
+    所有容器加入 1panel-network（bridge），容器名直连。
     apps/ 源码同时挂载到 OpenResty 和所有 FPM 容器，路径一致。
 ```
 
@@ -113,7 +113,7 @@ pandora/
 
 ```bash
 # 0. 首次使用需创建共享网络（仅一次）
-docker network create pandora-net
+docker network create 1panel-network
 
 # 1. 启动核心服务
 cd core && docker compose up -d
@@ -208,7 +208,7 @@ docker exec -it php83 sh
 
 ## 网络
 
-所有容器加入 `pandora-net`（bridge），容器名即 hostname：
+所有容器加入 `1panel-network`（bridge），容器名即 hostname：
 
 ```
 php83:9000  → 自动解析到 php83 容器
@@ -218,7 +218,7 @@ DB_HOST=mysql → 自动解析到 mysql 容器
 > 网络在 `core/docker-compose.yml` 中声明为 `external: true`，需要**手动创建**（仅一次）：
 >
 > ```bash
-> docker network create pandora-net
+> docker network create 1panel-network
 > ```
 
 ---

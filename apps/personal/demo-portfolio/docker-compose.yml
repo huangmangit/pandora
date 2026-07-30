@@ -5,7 +5,7 @@ services:
     container_name: demo-portfolio-frontend
     restart: always
     networks:
-      - pandora-net
+      - 1panel-network
 
   demo-portfolio-backend:
     build:
@@ -15,8 +15,8 @@ services:
     volumes:
       - ./backend-hyperf:/var/www/html
     networks:
-      - pandora-net
+      - 1panel-network
 
 networks:
-  pandora-net:
+  1panel-network:
     external: true

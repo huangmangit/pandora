@@ -1,5 +1,4 @@
 # 个人项目总编排 — include 所有个人子项目
 include:
-  - demo-blog/docker-compose.yml
-  - demo-portfolio/docker-compose.yml
+  - docsify/docker-compose.yml
   - maxadmin/docker-compose.yml

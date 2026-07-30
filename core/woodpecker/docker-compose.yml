@@ -17,7 +17,7 @@ services:
       WOODPECKER_AGENT_SECRET: ${WOODPECKER_AGENT_SECRET}
       WOODPECKER_ADMIN: ${WOODPECKER_ADMIN}
     networks:
-      - pandora-net
+      - 1panel-network
 
   woodpecker-agent:
     image: woodpeckerci/woodpecker-agent:latest
@@ -33,10 +33,10 @@ services:
       WOODPECKER_SERVER: woodpecker-server:9000
       WOODPECKER_AGENT_SECRET: ${WOODPECKER_AGENT_SECRET}
     networks:
-      - pandora-net
+      - 1panel-network
 
 networks:
-  pandora-net:
+  1panel-network:
     external: true
 
 volumes:
