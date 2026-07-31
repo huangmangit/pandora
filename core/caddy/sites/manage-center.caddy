@@ -1,0 +1,130 @@
+# ============================================================
+# 站点: 食安汇 (shianhui/manage-center)
+# 框架: Yii2 Advanced (多应用)
+# PHP:  7.4 (推荐，项目支持 >=5.4.0)
+# ============================================================
+# hosts 添加:
+#   127.0.0.1 sah.local.pandora
+#   127.0.0.1 api.sah.local.pandora
+#   127.0.0.1 farmers.sah.local.pandora
+#   127.0.0.1 member.sah.local.pandora
+#   127.0.0.1 merchant.sah.local.pandora
+#   127.0.0.1 market.sah.local.pandora
+#   127.0.0.1 monitor.sah.local.pandora
+#   127.0.0.1 monitoring.sah.local.pandora
+#   127.0.0.1 check.sah.local.pandora
+# ============================================================
+
+# ---- 农户端 (主站) ----
+http://farmers.sah.local.pandora {
+    redir / /v1/free/test
+    root * /var/www/apps/shianhui/manage-center/farmers/web
+
+    # 伪静态：不存在的文件/目录交给 index.php
+    @yii {
+        not file
+        not path */
+    }
+    rewrite @yii /index.php
+
+    php_fastcgi php74:9000
+    file_server
+}
+
+# ---- API 接口 ----
+http://api.sah.local.pandora {
+    root * /var/www/apps/shianhui/manage-center/api/web
+
+    @yii {
+        not file
+        not path */
+    }
+    rewrite @yii /index.php
+
+    php_fastcgi php74:9000
+    file_server
+}
+
+# ---- 会员端 ----
+http://member.sah.local.pandora {
+    root * /var/www/apps/shianhui/manage-center/member/web
+
+    @yii {
+        not file
+        not path */
+    }
+    rewrite @yii /index.php
+
+    php_fastcgi php74:9000
+    file_server
+}
+
+# ---- 商户端 ----
+http://merchant.sah.local.pandora {
+    root * /var/www/apps/shianhui/manage-center/merchant/web
+
+    @yii {
+        not file
+        not path */
+    }
+    rewrite @yii /index.php
+
+    php_fastcgi php74:9000
+    file_server
+}
+
+# ---- 市场端 ----
+http://market.sah.local.pandora {
+    root * /var/www/apps/shianhui/manage-center/market/web
+
+    @yii {
+        not file
+        not path */
+    }
+    rewrite @yii /index.php
+
+    php_fastcgi php74:9000
+    file_server
+}
+
+# ---- 监控端 ----
+http://monitor.sah.local.pandora {
+    root * /var/www/apps/shianhui/manage-center/monitor/web
+
+    @yii {
+        not file
+        not path */
+    }
+    rewrite @yii /index.php
+
+    php_fastcgi php74:9000
+    file_server
+}
+
+# ---- 监测端 ----
+http://monitoring.sah.local.pandora {
+    root * /var/www/apps/shianhui/manage-center/monitoring/web
+
+    @yii {
+        not file
+        not path */
+    }
+    rewrite @yii /index.php
+
+    php_fastcgi php74:9000
+    file_server
+}
+
+# ---- 检查端 ----
+http://check.sah.local.pandora {
+    root * /var/www/apps/shianhui/manage-center/check/web
+
+    @yii {
+        not file
+        not path */
+    }
+    rewrite @yii /index.php
+
+    php_fastcgi php74:9000
+    file_server
+}

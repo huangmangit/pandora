@@ -1,0 +1,53 @@
+# ============================================================
+# 站点配置模板
+# ============================================================
+# 使用方式：
+#   1. 复制此文件，改名为 <你的站点名>.caddy
+#   2. 修改域名、根目录、PHP 版本
+#   3. 修改本地 hosts: 127.0.0.1 <你的域名>
+#   4. 重启 Caddy: docker compose restart caddy
+# ============================================================
+
+# ---- 路径说明 ----
+# Caddy 容器挂载了 ../apps -> /var/www/apps
+# 站点根目录写法: /var/www/apps/<company>/<project>/public
+# 例如: /var/www/apps/personal/my-app/public
+
+# ---- PHP 版本 ----
+# php74:9000   — PHP 7.4 FPM
+# php83:9000   — PHP 8.3 FPM
+
+# ============================================================
+# 示例站点（取消注释即可使用）
+# ============================================================
+
+# ========== 示例 1: 普通 PHP 项目 ==========
+# myapp.local.pandora {
+#     root * /var/www/apps/personal/my-app/public
+#     php_fastcgi php83:9000
+#     file_server
+# }
+
+# ========== 示例 2: Laravel / Yii2 / ThinkPHP（需要伪静态） ==========
+# myapp.local.pandora {
+#     root * /var/www/apps/personal/my-app/public
+#     php_fastcgi php83:9000
+#     file_server
+#
+#     # URL 重写：不存在文件时交给 index.php
+#     @notStatic {
+#         not file
+#     }
+#     rewrite @notStatic /index.php
+# }
+
+# ========== 示例 3: 静态站点 ==========
+# docs.local.pandora {
+#     root * /var/www/apps/personal/docsify
+#     file_server
+# }
+
+# ========== 示例 4: 反向代理（Hyperf / Webman / Go 服务） ==========
+# api.local.pandora {
+#     reverse_proxy my-service:9501
+# }
