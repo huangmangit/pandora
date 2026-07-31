@@ -1,0 +1,5 @@
+# Caddy 运行数据（证书、日志等）
+data/
+
+# 站点配置文件（保留模板，忽略实际站点）
+# sites/*.caddy  — 已通过 _template.caddy.example 提供模板

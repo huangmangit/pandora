@@ -1,4 +1,60 @@
 services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: always
+    ports:
+      - "${CADDY_HTTP_PORT:-80}:80"
+      - "${CADDY_HTTPS_PORT:-443}:443"
+      - "${CADDY_HTTP_PORT:-80}:80/udp"
+      - "${CADDY_HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/sites:/etc/caddy/sites:ro
+      - ./caddy/data:/data
+      - ./caddy/config:/config
+      - ../apps:/var/www/apps
+    networks:
+      - 1panel-network
+      - pandora-net
+    healthcheck:
+      test: ["CMD", "caddy", "version"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  php74:
+    build:
+      context: .
+      dockerfile: Dockerfile.php74
+    container_name: php74
+    restart: always
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - ../apps:/var/www/apps
+      - ./php/conf.d/zzz-listen.conf:/usr/local/etc/php-fpm.d/zzz-listen.conf:ro
+      - ./php/conf.d/zzz-timezone.ini:/usr/local/etc/php/conf.d/zzz-timezone.ini:ro
+    networks:
+      - pandora-net
+      - 1panel-network
+
+  php83:
+    build:
+      context: .
+      dockerfile: Dockerfile.php83
+    container_name: php83
+    restart: always
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - ../apps:/var/www/apps
+      - ./php/conf.d/zzz-listen.conf:/usr/local/etc/php-fpm.d/zzz-listen.conf:ro
+      - ./php/conf.d/zzz-timezone.ini:/usr/local/etc/php/conf.d/zzz-timezone.ini:ro
+    networks:
+      - pandora-net
+      - 1panel-network
+
   mysql:
     image: mariadb:11.8
     container_name: mysql
@@ -105,6 +161,8 @@ services:
 
 networks:
   1panel-network:
+    external: true
+  pandora-net:
     external: true
 
 volumes:

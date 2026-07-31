@@ -1,0 +1,27 @@
+# ============================================================
+# Caddy 主配置 — 本地开发环境
+# ============================================================
+# 站点配置请放到 sites/ 目录下，以 .caddy 为扩展名
+# 文件名即站点标识，重启 Caddy 后生效：docker compose restart caddy
+# ============================================================
+
+{
+    # 关闭 admin API（生产可开，本地不需要）
+    # admin off
+
+    # 本地开发关闭自动 HTTPS（避免证书问题）
+    auto_https off
+
+    # 日志（可选）
+    # log {
+    #     output file /data/access.log
+    # }
+}
+
+# ---- 导入所有站点配置 ----
+import sites/*.caddy
+
+# ---- 默认回退（无匹配域名时） ----
+:80 {
+    respond "Caddy is running. Add site configs in sites/ directory." 200
+}

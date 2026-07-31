@@ -8,6 +8,7 @@
 
 | 服务 | 镜像 | 端口 | 容器名 |
 |------|------|------|--------|
+| **Caddy** | `caddy:2-alpine` | 80, 443 | `caddy` |
 | OpenResty | `uusec/openresty-manager:2.4.2` | 80, 443, 8808 | `openresty` |
 | PHP 7.4 | 自构建 (`Dockerfile.php74`) | — | `php74` |
 | PHP 8.3 | 自构建 (`Dockerfile.php83`) | — | `php83` |
@@ -22,21 +23,26 @@
 ## 架构
 
 ```
-                     openresty (:80/:443)
-                     (Web UI: https://:8808)
-                              │
-         ┌────────────────────┼────────────────────┐
-         ▼                    ▼                    ▼
-      php74                 php83              静态/反代
-   (PHP-FPM 7.4)        (PHP-FPM 8.3)       (Hyperf 等)
-         │                    │
-         └──────────┬─────────┘
-                    │
-             mysql (:3306)
-             redis (:6379)
+  本地开发 (Caddy)              线上生产 (OpenResty)
+  ┌─────────────────┐       ┌─────────────────────────┐
+  │  caddy (:80)    │       │  openresty (:80/:443)   │
+  │  sites/*.caddy  │       │  (Web UI: :8808)        │
+  └───────┬─────────┘       └───────────┬─────────────┘
+          │                             │
+          └──────────┬──────────────────┘
+                     │
+         ┌───────────┼───────────┐
+         ▼           ▼           ▼
+      php74        php83      静态/反代
+   (FPM 7.4)    (FPM 8.3)   (Hyperf 等)
+         │           │
+         └─────┬─────┘
+               │
+        mysql (:3306)
+        redis (:6379)
 
-   所有容器加入 1panel-network（bridge），容器名直连。
-   apps/ 源码同时挂载到 openresty 和所有 FPM 容器，路径一致。
+  所有容器加入 1panel-network（bridge），容器名直连。
+  apps/ 源码同时挂载到 caddy 和所有 FPM 容器，路径一致。
 ```
 
 ---
@@ -45,6 +51,8 @@
 
 | 变量 | 服务 | 说明 | 默认值 |
 |------|------|------|--------|
+| `CADDY_HTTP_PORT` | Caddy | HTTP 端口 | `80` |
+| `CADDY_HTTPS_PORT` | Caddy | HTTPS 端口 | `443` |
 | `MYSQL_ROOT_PASSWORD` | MySQL | root 密码 | `pandora123` |
 | `MYSQL_DATABASE` | MySQL | 默认数据库 | `pandora` |
 | `REDIS_PASSWORD` | Redis | 认证密码 | `pandora123` |
@@ -57,6 +65,200 @@
 
 ---
 
+## Caddy — 本地开发网关（推荐）
+
+> Caddy 2 是本地开发环境的主力 Web 服务器。自动 HTTPS、Caddyfile 配置简洁、PHP-FPM 原生支持，非常适合本地快速搭建站点。
+>
+> 线上生产环境使用 **OpenResty**（1Panel 管理面板），Caddy 专为本地开发设计。
+
+### 访问
+
+| 入口 | 地址 |
+|------|------|
+| **HTTP** | `http://localhost` (端口由 `CADDY_HTTP_PORT` 控制，默认 80) |
+| **HTTPS** | `https://localhost` (端口由 `CADDY_HTTPS_PORT` 控制，默认 443) |
+
+> 本地开发已关闭自动 HTTPS（`auto_https off`），直接 HTTP 访问即可，无需配置证书。
+
+### 启动 / 停止
+
+```bash
+# 启动 Caddy
+docker compose up -d caddy
+
+# 重载配置（修改站点后）
+docker compose restart caddy
+
+# 查看日志
+docker compose logs -f caddy
+
+# 停止
+docker compose stop caddy
+```
+
+### 目录结构
+
+```
+core/caddy/
+├── Caddyfile                  # 主配置（全局设置 + 导入 sites/）
+├── sites/                     # 站点配置目录
+│   ├── _template.caddy.example   # 站点配置模板（保留，不改名）
+│   └── myapp.caddy            # 你的站点配置（以 .caddy 结尾）
+├── data/                      # 证书、日志等运行时数据（已 gitignore）
+├── config/                    # Caddy 配置存储
+└── .gitignore
+```
+
+### 添加 PHP 站点（核心流程）
+
+以添加一个 Yii2 项目 `my-shop` 到 PHP 8.3 为例：
+
+#### 第 1 步：确保 PHP-FPM 容器运行
+
+```bash
+docker compose up -d php83
+# 确认容器名为 php83，Caddy 通过 php83:9000 连接
+```
+
+#### 第 2 步：创建站点配置文件
+
+在 `core/caddy/sites/` 下创建 `myshop.caddy`（文件名即站点标识）：
+
+```caddy
+# 站点: my-shop
+# PHP: 8.3
+myshop.local.pandora {
+    root * /var/www/apps/personal/my-shop/public
+
+    # PHP-FPM 连接（容器名:9000）
+    php_fastcgi php83:9000
+
+    # 静态文件直接返回
+    file_server
+
+    # Yii2 / Laravel / ThinkPHP 伪静态
+    @notStatic {
+        not file
+    }
+    rewrite @notStatic /index.php
+}
+```
+
+> **路径规则**: Caddy 挂载了 `../apps:/var/www/apps`，站点根目录写 `/var/www/apps/<company>/<project>/public`
+
+#### 第 3 步：添加 hosts
+
+编辑 `C:\Windows\System32\drivers\etc\hosts`（管理员权限）：
+
+```
+127.0.0.1 myshop.local.pandora
+```
+
+#### 第 4 步：重载 Caddy
+
+```bash
+cd core && docker compose restart caddy
+```
+
+#### 第 5 步：打开浏览器
+
+```
+http://myshop.local.pandora
+```
+
+### 站点配置速查
+
+#### 普通 PHP 项目
+
+```caddy
+myapp.local.pandora {
+    root * /var/www/apps/personal/my-app/public
+    php_fastcgi php83:9000
+    file_server
+}
+```
+
+#### Laravel / Yii2 / ThinkPHP（伪静态）
+
+```caddy
+myapp.local.pandora {
+    root * /var/www/apps/personal/my-app/public
+    php_fastcgi php83:9000
+    file_server
+
+    @notStatic { not file }
+    rewrite @notStatic /index.php
+}
+```
+
+#### PHP 7.4 项目
+
+将 `php_fastcgi php83:9000` 改为 `php_fastcgi php74:9000` 即可。
+
+#### 静态站点
+
+```caddy
+docs.local.pandora {
+    root * /var/www/apps/personal/docsify
+    file_server
+}
+```
+
+#### 反向代理（Hyperf / Webman / Go 服务）
+
+```caddy
+api.local.pandora {
+    reverse_proxy maxadmin-api:8787
+}
+```
+
+#### 多域名指向同站点
+
+```caddy
+myapp.local.pandora, www.myapp.local.pandora {
+    root * /var/www/apps/personal/my-app/public
+    php_fastcgi php83:9000
+    file_server
+}
+```
+
+#### 自定义 HTTP 响应头
+
+```caddy
+myapp.local.pandora {
+    root * /var/www/apps/personal/my-app/public
+    php_fastcgi php83:9000
+    file_server
+
+    header Access-Control-Allow-Origin "*"
+}
+```
+
+### 环境变量
+
+在 `.env` 中可修改 Caddy 的监听端口：
+
+```bash
+# 如果 80 端口冲突，改为 8080
+CADDY_HTTP_PORT=8080
+CADDY_HTTPS_PORT=8443
+```
+
+### 常见问题
+
+**Q: 修改 Caddyfile 后没生效？**  
+A: 必须 restart（不是 reload）：`docker compose restart caddy`
+
+**Q: 访问站点 502 Bad Gateway？**  
+A: 检查 PHP-FPM 容器是否在运行：`docker compose ps php83`。确保 php_fastcgi 指向了正确的容器名（`php83:9000` 或 `php74:9000`）。
+
+**Q: 访问站点 404？**  
+A: 检查 root 路径是否正确。进入 Caddy 容器验证：`docker exec caddy ls /var/www/apps/personal/`
+
+**Q: 80 端口被占用？**  
+A: 修改 `.env` 中 `CADDY_HTTP_PORT=8080`，然后 `docker compose up -d caddy`
+
+---
 ## OpenResty — 统一网关
 
 基于 OpenResty（Nginx + Lua）的 Web 管理面板，浏览器中可视化管理站点、证书、反代规则。
@@ -145,22 +347,42 @@ docker network create 1panel-network
 # 启动全部核心服务
 cd core && docker compose up -d
 
-# 单独启动
-docker compose up -d openresty php74 php83 mysql redis
+# 只启动本地开发所需服务（Caddy + PHP + DB）
+docker compose up -d caddy php74 php83 mysql redis
 
 # 查看状态
 docker compose ps
 
 # 日志
-docker compose logs -f openresty
+docker compose logs -f caddy
 
-# 重载 OpenResty（或通过管理界面操作）
-docker exec openresty nginx -s reload
+# 重载 Caddy（修改站点配置后）
+docker compose restart caddy
 ```
 
 ---
 
 ## 添加新项目（完整流程）
+
+### 本地开发（Caddy，推荐）
+
+```bash
+# 1. 创建项目目录
+mkdir -p apps/personal/my-app/public
+echo '<?php phpinfo();' > apps/personal/my-app/public/index.php
+
+# 2. 创建站点配置文件 core/caddy/sites/myapp.caddy
+#    参考上方「添加 PHP 站点（核心流程）」部分
+
+# 3. 添加 hosts: 127.0.0.1 myapp.local.pandora
+
+# 4. 重载 Caddy
+cd core && docker compose restart caddy
+
+# 5. 打开 http://myapp.local.pandora
+```
+
+### 线上生产（OpenResty）
 
 ```bash
 # 1. 创建项目目录
