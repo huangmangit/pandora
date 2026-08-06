@@ -158,7 +158,19 @@ services:
       WOODPECKER_FILTER_LABELS: "node=${WOODPECKER_AGENT_LABEL}" 
     networks:
       - 1panel-network
-
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: always
+    environment:
+      # DOMAIN: "https://vaultwarden.example.com" # 使用反向代理时必填；您的域名；Vaultwarden 需要知道它是 https 才能正确处理附件
+      SIGNUPS_ALLOWED: "true" # 创建账户后，使用 "false" 停用此选项，这样就不会有陌生人注册了
+    volumes:
+      - ./vaultwarden:/data # : 前面的路径可以修改
+    ports:
+      - 11001:80 # 您可以将 11001 替换为您喜欢的端口
+    networks:
+      - 1panel-network
 networks:
   1panel-network:
     external: true
