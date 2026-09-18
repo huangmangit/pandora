@@ -55,9 +55,9 @@ services:
       - pandora-net
       - 1panel-network
 
-  mysql:
+  mariadb:
     image: mariadb:11.8
-    container_name: mysql
+    container_name: mariadb
     restart: always
     environment:
       MARIADB_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
