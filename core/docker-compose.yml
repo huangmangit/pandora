@@ -134,6 +134,17 @@ services:
     networks:
       - 1panel-network
 
+  dbx:
+    image: t8y2/dbx
+    container_name: dbx
+    ports:
+      - "14224:4224"
+    volumes:
+      - /etc/hosts:/etc/hosts:ro
+      - ./dbx-data:/app/data
+    networks:
+      - 1panel-network
+
   dpanel:
     image: dpanel/dpanel:1.10.6
     container_name: dpanel
