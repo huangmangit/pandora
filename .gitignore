@@ -1,16 +1,12 @@
-.history/
-.reasonix/*
-reasonix.toml
-
-# core — 忽略运行时生成的数据，保留目录骨架
-core/openresty/acme/*
-!core/openresty/acme/.gitkeep
-core/openresty/conf/*
-!core/openresty/conf/.gitkeep
-core/openresty/data/*
-!core/openresty/data/.gitkeep
-core/woodpecker/data/*
-!core/woodpecker/data/.gitkeep
-
-apps/*
-core/.env
+.env
+.history/*
+dbx-data/*
+agentscope/*
+# Local service data and generated configuration
+.DS_Store
+vaultwarden/
+woodpecker/agent-data/
+log/
+openresty/data/
+openresty/conf/
+caddy/config/

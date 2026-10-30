@@ -1,20 +1,207 @@
-# ============================================================
-# Pandora Docker 部署 — 顶层入口
-# 通过 include 引入各分组文件，docker compose 命令不变
-# ============================================================
-#
-# 分组文件：
-#   core/docker-compose.yml              核心基础服务
-#   apps/personal/docker-compose.yml      个人项目
-#   apps/company-a/docker-compose.yml     A公司项目
-#   apps/outsource-a/docker-compose.yml   外包A项目
-#
-# 启动：
-#   docker compose up -d                  # 全量启动
-#   docker compose -f core/docker-compose.yml up -d  # 仅核心
+services:
+  php74:
+    build:
+      context: .
+      dockerfile: php/7.4/Dockerfile
+    container_name: php74
+    restart: always
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - ../apps:/var/www/apps
+      - ./php/conf.d/zzz-listen.conf:/usr/local/etc/php-fpm.d/zzz-listen.conf:ro
+      - ./php/conf.d/zzz-timezone.ini:/usr/local/etc/php/conf.d/zzz-timezone.ini:ro
+    networks:
+      - pandora-net
+      - 1panel-network
 
-include:
-  - core/docker-compose.yml
-  - apps/personal/docker-compose.yml
-  - apps/company-a/docker-compose.yml
-  - apps/outsource-a/docker-compose.yml
+  php83:
+    build:
+      context: .
+      dockerfile: php/8.3/Dockerfile
+    container_name: php83
+    restart: always
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - ../apps:/var/www/apps
+      - ./php/conf.d/zzz-listen.conf:/usr/local/etc/php-fpm.d/zzz-listen.conf:ro
+      - ./php/conf.d/zzz-timezone.ini:/usr/local/etc/php/conf.d/zzz-timezone.ini:ro
+    networks:
+      - pandora-net
+      - 1panel-network
+
+  mariadb:
+    image: mariadb:11.8
+    container_name: mariadb
+    restart: always
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MARIADB_DATABASE: ${MYSQL_DATABASE}
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mysql/conf.d:/etc/mysql/conf.d
+      - ./mysql/init:/docker-entrypoint-initdb.d
+      - mysql-data:/var/lib/mysql
+    command: >
+      --character-set-server=utf8mb4 
+      --collation-server=utf8mb4_unicode_ci 
+      --skip-log-bin
+      --max-connections=500
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - 1panel-network
+
+  postgres:
+    image: postgres:18.4-alpine
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pgadmin@123}
+      POSTGRES_DB: ${POSTGRES_DB:-exampledb}
+      PPOSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C.UTF-8 --lc-ctype=C.UTF-8" # 修复 locale
+      PGDATA: /var/lib/postgresql/data # 显式声明数据目录
+      TZ: Asia/Shanghai
+      LANG: C.UTF-8 # 与 initdb 保持一致
+    env_file:
+      - ./.env
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - pgdata-data:/bitnami/postgresql:z
+      - tablespace:/tablespace_location:z
+      - ${PWD}/log:/var/log/postgresql:z
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck: # ✅ 新增健康检查
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-exampledb}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - 1panel-network
+
+  redis:
+    image: redis:8.8.1
+    container_name: redis
+    restart: always
+    command: redis-server /usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - 1panel-network
+
+  dbx:
+    image: t8y2/dbx
+    container_name: dbx
+    ports:
+      - "14224:4224"
+    volumes:
+      - /etc/hosts:/etc/hosts:ro
+      - ./dbx-data:/app/data
+    networks:
+      - 1panel-network
+
+  dpanel:
+    image: dpanel/dpanel:1.10.6
+    container_name: dpanel
+    restart: always
+    ports:
+      - "${DPANEL_PORT:-8807}:8080"
+    environment:
+      APP_NAME: dpanel
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - dpanel-data:/dpanel
+    networks:
+      - 1panel-network
+
+  woodpecker-server:
+    image: woodpeckerci/woodpecker-server:v3.16.0
+    container_name: woodpecker-server
+    restart: always
+    ports:
+      - "8000:8000"
+      - "9000:9000"
+    volumes:
+      - woodpecker-data:/var/lib/woodpecker
+    environment:
+      # ⚠️ 必须：你的外部访问地址 (例如 https://ci.yourdomain.com 或 http://公网IP:8000)
+      WOODPECKER_HOST: ${WOODPECKER_HOST}
+
+      # ⚠️ 必须：Agent 连接 Server 的密钥 (随便生成一个长字符串)
+      WOODPECKER_AGENT_SECRET: ${WOODPECKER_AGENT_SECRET}
+
+      # ⚠️ 必须：指定第一次登录时自动成为管理员的 GitHub 用户名
+      WOODPECKER_ADMIN: ${WOODPECKER_ADMIN}
+
+      # ==========================================
+      # 🚀 GitHub OAuth 专属配置 (替换原来的 Gitea)
+      # ==========================================
+      WOODPECKER_GITHUB: "true"
+      WOODPECKER_GITHUB_CLIENT: ${WOODPECKER_GITHUB_CLIENT}
+      WOODPECKER_GITHUB_SECRET: ${WOODPECKER_GITHUB_SECRET}
+      # 注意：如果是公共 GitHub，不需要配 WOODPECKER_GITHUB_URL。如果是 GitHub Enterprise 才需要。
+    networks:
+      - 1panel-network
+
+  woodpecker-agent:
+    image: woodpeckerci/woodpecker-agent:v3.16.0
+    container_name: woodpecker-agent
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./woodpecker/agent-data:/etc/woodpecker
+    environment:
+      WOODPECKER_SERVER: ${WOODPECKER_SERVER}
+      WOODPECKER_AGENT_SECRET: ${WOODPECKER_AGENT_SECRET}
+      WOODPECKER_MAX_PROCS: 2
+      # 新增这一行！给这台机器打上唯一的身份标签
+      WOODPECKER_FILTER_LABELS: "node=${WOODPECKER_AGENT_LABEL}"
+    networks:
+      - 1panel-network
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: always
+    environment:
+      # DOMAIN: "https://vaultwarden.example.com" # 使用反向代理时必填；您的域名；Vaultwarden 需要知道它是 https 才能正确处理附件
+      SIGNUPS_ALLOWED: "true" # 创建账户后，使用 "false" 停用此选项，这样就不会有陌生人注册了
+    volumes:
+      - ./vaultwarden:/data # : 前面的路径可以修改
+    ports:
+      - 11001:80 # 您可以将 11001 替换为您喜欢的端口
+    networks:
+      - 1panel-network
+networks:
+  1panel-network:
+    external: true
+  pandora-net:
+    external: true
+
+volumes:
+  pgdata-data:
+  tablespace:
+  mysql-data:
+  redis-data:
+  woodpecker-data:
+  dpanel-data:

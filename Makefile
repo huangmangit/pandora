@@ -4,13 +4,13 @@
 
 # ═══ 核心服务 ═══
 core-up:
-	docker compose -f core/docker-compose.yml up -d
+	docker compose -f docker-compose.yml up -d
 
 core-down:
-	docker compose -f core/docker-compose.yml down
+	docker compose -f docker-compose.yml down
 
 logs-core:
-	docker compose -f core/docker-compose.yml logs -f
+	docker compose -f docker-compose.yml logs -f
 
 # ═══ 全局 ═══
 up-all:
